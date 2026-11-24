@@ -141,6 +141,12 @@ html{scrollbar-color:#00ff40 #000}
 .btns{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
 /* player */
 .pbar{overflow-x:auto;transition:opacity .25s}.pbar button{white-space:nowrap}
+.pbar{gap:8px}.pbar button{height:40px;min-width:40px;padding:0 12px;border-radius:10px;font-size:15px;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.pbar #pclose{margin-right:4px;background:#ffffff33}
+.pbar .pg{display:flex;align-items:center;gap:6px;padding-left:10px;margin-left:2px;border-left:1px solid #ffffff2e;flex:none}
+.pbar .pg:not(:has(button:not(.hide))){display:none}
+.pbar .ti{margin-right:6px}
+@media(max-width:760px){.pbar .lbl{display:none}.pbar button{padding:0 9px}}
 #player.idle{cursor:none}#player.idle .pbar{opacity:0;pointer-events:none}
 .cfg h3{margin:0 0 4px}.cfg .sec{margin:16px 0 4px;font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em}
 .cfg .row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;margin:4px 0;background:var(--card2);border-radius:10px}
@@ -222,7 +228,7 @@ body.tv .ch,body.tv .gh{padding:12px 16px}
 
 <div id="player" class="hide">
  <video id="vid" controls controlsList="nofullscreen" autoplay playsinline></video>
- <div class="pbar"><button id="pclose" title="Fechar (Esc)">✕</button><div class="ti"><div id="ptitle"></div><div id="psub"></div></div><button id="pprev" class="hide" title="Canal anterior">◀</button><button id="pnext" class="hide">Próximo ▶</button><button id="pb10" class="hide" title="Voltar 10s">⏪ 10</button><button id="pf10" class="hide" title="Avançar 10s">10 ⏩</button><button id="pgbtn" class="hide" title="Programação (G)">📅<span class="lbl"> Programação</span></button><button id="pfav" title="Favoritar (D)">☆</button><button id="plbtn" title="Lista (L)">☰<span class="lbl"> Lista</span></button><button id="ppip" class="hide" title="Janela flutuante">⧉</button><button id="pfit" title="Formato da imagem (A)">▭</button><button id="psbtn" title="Ajustes (S)">⚙</button><button id="pfs" title="Tela cheia (F)">⛶</button></div>
+ <div class="pbar"><button id="pclose" title="Fechar (Esc)">✕</button><div class="ti"><div id="ptitle"></div><div id="psub"></div></div><div class="pg"><button id="pprev" class="hide" title="Canal anterior">◀</button><button id="pnext" class="hide">Próximo ▶</button><button id="pb10" class="hide" title="Voltar 10s">⏪ 10</button><button id="pf10" class="hide" title="Avançar 10s">10 ⏩</button></div><div class="pg"><button id="pgbtn" class="hide" title="Programação (G)">📅<span class="lbl"> Programação</span></button><button id="pfav" title="Favoritar (D)">☆</button><button id="plbtn" title="Lista (L)">☰<span class="lbl"> Lista</span></button></div><div class="pg"><button id="ppip" class="hide" title="Janela flutuante">⧉</button><button id="pfit" title="Formato da imagem (A)">▭</button><button id="psbtn" title="Ajustes (S)">⚙</button><button id="pfs" title="Tela cheia (F)">⛶</button></div></div>
  <div id="pepg" class="hide"></div>
  <div id="pset" class="hide"></div><input id="subf" type="file" accept=".srt,.vtt,.txt" class="hide">
  <div id="plist" class="hide"><select id="pcat"></select><input id="pq" type="search" placeholder="Buscar nesta lista…"><div id="pitems"></div></div>
