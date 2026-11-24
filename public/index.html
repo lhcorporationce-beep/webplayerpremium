@@ -228,7 +228,7 @@ body.tv .ch,body.tv .gh{padding:12px 16px}
 
 <div id="player" class="hide">
  <video id="vid" controls controlsList="nofullscreen" autoplay playsinline></video>
- <div class="pbar"><button id="pclose" title="Fechar (Esc)">✕</button><div class="ti"><div id="ptitle"></div><div id="psub"></div></div><div class="pg"><button id="pprev" class="hide" title="Canal anterior">◀</button><button id="pnext" class="hide">Próximo ▶</button><button id="pb10" class="hide" title="Voltar 10s">⏪ 10</button><button id="pf10" class="hide" title="Avançar 10s">10 ⏩</button></div><div class="pg"><button id="pgbtn" class="hide" title="Programação (G)">📅<span class="lbl"> Programação</span></button><button id="pfav" title="Favoritar (D)">☆</button><button id="plbtn" title="Lista (L)">☰<span class="lbl"> Lista</span></button></div><div class="pg"><button id="ppip" class="hide" title="Janela flutuante">⧉</button><button id="pfit" title="Formato da imagem (A)">▭</button><button id="psbtn" title="Ajustes (S)">⚙</button><button id="pfs" title="Tela cheia (F)">⛶</button></div></div>
+ <div class="pbar"><button id="pclose" title="Fechar (Esc)">✕</button><div class="ti"><div id="ptitle"></div><div id="psub"></div></div><div class="pg"><button id="pprev" class="hide" title="Canal anterior">◀</button><button id="pnext" class="hide">Próximo ▶</button><button id="pb10" class="hide" title="Voltar 10s">⏪ 10</button><button id="pf10" class="hide" title="Avançar 10s">10 ⏩</button></div><div class="pg"><button id="pgbtn" class="hide" title="Programação (G)">📅<span class="lbl"> Programação</span></button><button id="pfav" title="Favoritar (D)">☆</button><button id="plbtn" title="Lista (L)">☰<span class="lbl"> Lista</span></button></div><div class="pg"><button id="ppip" class="hide" title="Janela flutuante">⧉</button><button id="pfit" title="Formato da imagem (A)">▭</button><button id="psbtn" title="Ajustes (S)">⚙</button></div></div>
  <div id="pepg" class="hide"></div>
  <div id="pset" class="hide"></div><input id="subf" type="file" accept=".srt,.vtt,.txt" class="hide">
  <div id="plist" class="hide"><select id="pcat"></select><input id="pq" type="search" placeholder="Buscar nesta lista…"><div id="pitems"></div></div>
@@ -943,9 +943,9 @@ function toggleFS(){
   else if(d.webkitRequestFullscreen)d.webkitRequestFullscreen();
   else if(playCtx&&V.webkitEnterFullscreen)V.webkitEnterFullscreen();
 }
-function fsSync(){const on=!!FSE();[$('#fsbtn'),$('#pfs')].forEach(b=>{b.textContent=on?'🗗':'⛶';b.title=on?'Sair da tela cheia (Esc)':'Tela cheia (F11)'})}
+function fsSync(){const on=!!FSE();[$('#fsbtn')].forEach(b=>{b.textContent=on?'🗗':'⛶';b.title=on?'Sair da tela cheia (Esc)':'Tela cheia (F11)'})}
 document.addEventListener('fullscreenchange',fsSync);document.addEventListener('webkitfullscreenchange',fsSync);
-$('#fsbtn').onclick=$('#pfs').onclick=toggleFS;
+$('#fsbtn').onclick=toggleFS;
 if(!(document.documentElement.requestFullscreen||document.documentElement.webkitRequestFullscreen))$('#fsbtn').classList.add('hide');
 
 /* ---------- Shaka Player ---------- */
@@ -1013,8 +1013,10 @@ function setBuild(){
   if(!playCtx.live)h+='<div class="sh">Velocidade</div>'+[0.5,0.75,1,1.25,1.5,2].map(v=>opt('r',v,v+'x',V.playbackRate===v)).join('');
   h+='<div class="sh">Reprodutor de vídeo</div>'+ENGS.map(([v,l])=>opt('e',v,l,ENG===v)).join('')+'<p class="mut" style="font-size:12px;margin:6px 2px">ExoPlayer existe só no app Android. JW Player exige licença paga.</p>';
   h+='<div class="sh">Formato da imagem</div>'+FITS.map(([v,l])=>opt('f',v,l,fitMode===v)).join('');
+  h+='<div class="sh">Tela</div>'+opt('fs','',FSE()?'🗗 Sair da tela cheia':'⛶ Tela cheia',!!FSE());
   P.innerHTML=h;
 }
+const P_hide=()=>$('#pset').classList.add('hide');
 $('#pset').onclick=e=>{
   const b=e.target.closest('.opt');if(!b)return;const g=b.dataset.g,v=b.dataset.v;
   if(g==='q'&&hls)hls.currentLevel=+v;
@@ -1027,6 +1029,7 @@ $('#pset').onclick=e=>{
   else if(g==='e'){setEng(v);return}
   else if(g==='r')V.playbackRate=+v;
   else if(g==='f')applyFit(v);
+  else if(g==='fs'){P_hide();toggleFS();return}
   else if(g==='file'){$('#subf').click();return}
   setBuild();
 };
