@@ -220,7 +220,6 @@ body.tv .ch,body.tv .gh{padding:12px 16px}
    <button data-t="guide" title="Programação dos canais"><span class="ic">📅</span><span class="nl">Guia</span></button>
    <button data-t="movie" title="Todos os filmes"><span class="ic">🎬</span><span class="nl">Filmes</span></button>
    <button data-t="series" title="Todas as séries"><span class="ic">🍿</span><span class="nl">Séries</span></button>
-   <button data-t="fav" title="Sua lista de favoritos"><span class="ic">⭐</span><span class="nl">Favoritos</span></button>
    <button data-t="hist" title="Continue de onde parou"><span class="ic">⏯</span><span class="nl">Continuar</span></button>
   </nav>
   <input id="q" type="search" placeholder="Buscar…" title="Buscar canais, filmes e séries">
@@ -616,13 +615,13 @@ function render(){
     if(q)items=items.filter(x=>x.name.toLowerCase().includes(q))}
   // sidebar
   const A=$('#cats');
-  if(catList){A.style.display='';A.innerHTML=`<button class="cat ${cat==='all'?'on':''}" data-c="all">Todos (${D[tab==='guide'?'live':tab].length})</button><button class="cat ${cat==='__fav'?'on':''}" data-c="__fav">⭐ Favoritos (${D[tab==='guide'?'live':tab].filter(x=>F[fkey(x)]).length})</button>`+catList.map(c=>`<button class="cat ${cat===String(c.category_id)?'on':''}" data-c="${esc(c.category_id)}">${esc(c.category_name)}</button>`).join('');
+  if(catList){A.style.display='';A.innerHTML=`<button class="cat ${cat==='__fav'?'on':''}" data-c="__fav">⭐ Favoritos (${D[tab==='guide'?'live':tab].filter(x=>F[fkey(x)]).length})</button><button class="cat ${cat==='all'?'on':''}" data-c="all">Todos (${D[tab==='guide'?'live':tab].length})</button>`+catList.map(c=>`<button class="cat ${cat===String(c.category_id)?'on':''}" data-c="${esc(c.category_id)}">${esc(c.category_name)}</button>`).join('');
     $$('.cat').forEach(b=>b.onclick=()=>{cat=b.dataset.c;render()})}
   else{A.style.display='none';A.innerHTML=''}
   const C=$('#content');
   let head='';
   if(tab==='fav')head='<div class="stabs favt">'+[['all','Todos'],['live','Canais'],['movie','Filmes'],['series','Séries']].map(([k,l])=>`<button class="${favT===k?'on':''}" data-ft="${k}">${l} (${favCnt[k]||0})</button>`).join('')+'</div>';
-  if(catList)head=`<select class="catsel" id="csel"><option value="all">Todas as categorias</option><option value="__fav" ${cat==='__fav'?'selected':''}>⭐ Favoritos</option>${catList.map(c=>`<option value="${esc(c.category_id)}" ${cat===String(c.category_id)?'selected':''}>${esc(c.category_name)}</option>`).join('')}</select>`;
+  if(catList)head=`<select class="catsel" id="csel"><option value="__fav" ${cat==='__fav'?'selected':''}>⭐ Favoritos</option><option value="all">Todas as categorias</option>${catList.map(c=>`<option value="${esc(c.category_id)}" ${cat===String(c.category_id)?'selected':''}>${esc(c.category_name)}</option>`).join('')}</select>`;
   if(!items.length){C.innerHTML=head+`<div class="empty">${tab==='fav'||cat==='__fav'?'Nenhum favorito aqui ainda. Toque na ⭐ de um item.':tab==='hist'?'Nada assistido ainda.':'Nada encontrado.'}</div>`;bindSel();return}
   const isGuide=tab==='guide';
   const isList=(tab==='live')||isGuide||(tab==='fav'&&items.every(i=>i.type==='live'));
@@ -691,7 +690,7 @@ function renderHome(q){
 
 /* ---------- tour de boas-vindas ---------- */
 const TOUR=[['👋','Bem-vindo!','Este tour rápido mostra onde fica cada coisa. Leva 20 segundos.'],
-['🧭','Menu do topo','Início, Ao vivo, Guia, Filmes, Séries, Favoritos e Continuar. Use a busca para achar qualquer título.'],
+['🧭','Menu do topo','Início, Ao vivo, Guia, Filmes, Séries e Continuar. Os favoritos ficam no topo da lista de cada seção. Use a busca para achar qualquer título.'],
 ['▶','Dentro do player','Embaixo ficam os controles: canal anterior/próximo, Programação, ☆ favorito, Lista e Ajustes.'],
 ['⚙','Ajustes e idioma','No ⚙ do topo: idioma, controle dos pais, tela cheia e reprodutor. Dentro do player, o ⚙ muda qualidade, áudio e legenda.'],
 ['⌨','Atalhos','F tela cheia • D favoritar • L lista • G programação • S ajustes • Esc fechar.']];
