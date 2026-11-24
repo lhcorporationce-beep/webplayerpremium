@@ -70,6 +70,10 @@ h3{margin:18px 0 10px}
 .eps{display:grid;gap:6px;margin-top:10px}.eps button{text-align:left}
 #player{position:fixed;inset:0;background:#000;z-index:30;display:flex;flex-direction:column}
 #player video{flex:1;width:100%;min-height:0;background:#000;margin-bottom:64px}#player.idle video{margin-bottom:0}
+#player.tc video{margin-bottom:108px}#player.tc.idle video{margin-bottom:0}
+#tcbar{position:absolute;left:0;right:0;bottom:64px;display:flex;align-items:center;gap:10px;padding:6px 16px;background:#000b;font-size:13px;z-index:3;transition:opacity .25s}
+#tcbar input{flex:1;accent-color:#00ff40;height:6px}
+#player.idle #tcbar{opacity:0;pointer-events:none}
 video::-webkit-media-controls-panel{background-image:linear-gradient(transparent,#000d)}
 video::-webkit-media-controls-timeline{filter:hue-rotate(-80deg) saturate(2.2) brightness(1.1)}
 video::-webkit-media-controls-volume-slider{filter:hue-rotate(-80deg) saturate(2.2) brightness(1.1)}
@@ -222,6 +226,7 @@ body.tv .ch,body.tv .gh{padding:12px 16px}
  <div id="pepg" class="hide"></div>
  <div id="pset" class="hide"></div><input id="subf" type="file" accept=".srt,.vtt,.txt" class="hide">
  <div id="plist" class="hide"><select id="pcat"></select><input id="pq" type="search" placeholder="Buscar nesta lista…"><div id="pitems"></div></div>
+ <div id="tcbar" class="hide"><span id="tcc">0:00</span><input id="tcr" type="range" min="0" max="100" value="0" step="1"><span id="tcd">0:00</span></div>
  <div id="perr"></div>
  <div id="ptoast" class="hide"></div>
 </div>
@@ -463,6 +468,7 @@ function openSettings(){
   <div class="sec">Reprodução</div>
   ${row('Reprodutor de vídeo','ExoPlayer existe só no app Android.',sel('cl_eng',ENGS,ENG))}
   ${row('Formato da imagem','',sel('cl_fit',FITS,fitMode))}
+  ${row('Converter formatos não suportados','Filmes em MKV/AVI/HEVC são convertidos pelo servidor para tocar no navegador.',sw('cl_tc',TCON))}
   ${row('Retomar de onde parou','Continua filmes e episódios do ponto em que você parou.',sw('cl_res',RESUME))}
   ${row('Próximo episódio automático','Toca o próximo episódio ao terminar.',sw('cl_nx',AUTONEXT))}
   <div class="sec">Aparência</div>
@@ -482,6 +488,7 @@ function openSettings(){
   $('#cl_eng').onchange=e=>setEng(e.target.value);
   $('#cl_fit').onchange=e=>applyFit(e.target.value);
   const tg=(id,get,set)=>{$(id).onclick=()=>{set(!get());$(id).classList.toggle('on',get());$(id).setAttribute('aria-checked',get())}};
+  tg('#cl_tc',()=>TCON,v=>{TCON=v;LS.set('tc',v)});
   tg('#cl_res',()=>RESUME,v=>{RESUME=v;LS.set('resume',v)});
   tg('#cl_nx',()=>AUTONEXT,v=>{AUTONEXT=v;LS.set('autonext',v)});
   tg('#cl_tv',()=>document.body.classList.contains('tv'),v=>{document.body.classList.toggle('tv',v);LS.set('tv',v)});
@@ -801,6 +808,37 @@ const fmt=s=>{s=Math.floor(s);const h=Math.floor(s/3600),m=Math.floor(s%3600/60)
 const V=$('#vid');
 const wd={last:-1,n:0,tries:0,rt:0};
 function stop(){V.querySelectorAll('track').forEach(t=>t.remove());if(hls){hls.destroy();hls=null}if(mpg){mpg.destroy();mpg=null}if(shk){try{shk.destroy()}catch{}shk=null}V.pause();V.removeAttribute('src');V.load()}
+/* ---------- conversão no servidor (MKV/AVI/HEVC) ---------- */
+let TCON=LS.get('tc',true),tcDrag=false;
+const isTc=()=>!!(playCtx&&playCtx.tc);
+const curT=()=>isTc()?playCtx.tc.base+V.currentTime:V.currentTime;
+const durT=()=>isTc()?playCtx.tc.dur:V.duration;
+function seekTo(t){t=Math.max(0,t);const d=durT();if(d&&isFinite(d))t=Math.min(t,Math.max(0,d-2));
+  if(isTc())play({...playCtx,tc:{...playCtx.tc,base:t},startAt:0});else V.currentTime=t}
+const seekBy=d=>seekTo(curT()+d);
+function tcFallback(ctx){
+  if(!TCON||ctx.live||ctx.tc||ctx.tcTried)return false;
+  const orig=ctx.orig||ctx.url;
+  $('#perr').textContent=tr('Convertendo o filme para o seu navegador…');
+  fetch('/t/info?u='+encodeURIComponent(orig)).then(r=>r.ok?r.json():Promise.reject(r.status)).then(j=>{
+    if(!playCtx||playCtx.it!==ctx.it)return;
+    play({...ctx,orig,tc:{dur:j.dur||0,base:ctx.startAt||0},tcTried:true,startAt:0});
+  }).catch(st=>{if(playCtx&&playCtx.it===ctx.it)$('#perr').textContent=tr(st===501?'Conversão indisponível neste servidor.':'Formato não suportado pelo navegador (ex.: MKV/AVI). Tente outro título.')});
+  return true;
+}
+function tcStart(ctx){
+  stop();V.controls=false;
+  $('#tcr').max=String(Math.max(1,Math.floor(ctx.tc.dur||0)));$('#tcr').disabled=!ctx.tc.dur;$('#tcd').textContent=ctx.tc.dur?fmt(ctx.tc.dur):'';
+  $('#tcr').value=String(Math.floor(ctx.tc.base));$('#tcc').textContent=fmt(ctx.tc.base);
+  $('#perr').textContent=tr('Convertendo o filme para o seu navegador…');
+  V.onerror=()=>{$('#perr').textContent=tr('Não foi possível converter este título.')};
+  V.src='/t?u='+encodeURIComponent(ctx.orig||ctx.url)+'&ss='+Math.floor(ctx.tc.base);
+  V.play().catch(()=>{});
+  mediaInfo(ctx);wlOn();favSync();applyFit(fitMode);
+}
+$('#tcr').oninput=()=>{tcDrag=true;$('#tcc').textContent=fmt(+$('#tcr').value)};
+$('#tcr').onchange=()=>{tcDrag=false;seekTo(+$('#tcr').value)};
+V.addEventListener('timeupdate',()=>{if(isTc()&&!tcDrag){const t=curT();$('#tcr').value=String(Math.floor(t));$('#tcc').textContent=fmt(t)}});
 function play(ctx,alt){
   const same=!!(playCtx&&playCtx.it===ctx.it);playCtx=ctx;V.controls=!ctx.live;if(!same)wd.tries=0;$('#player').classList.remove('hide');$('#ptitle').textContent=ctx.title;$('#perr').textContent='';
   $('#pnext').classList.toggle('hide',!ctx.next);$('#pprev').classList.toggle('hide',!ctx.prev);$('#pb10').classList.toggle('hide',!!ctx.live);$('#pf10').classList.toggle('hide',!!ctx.live);$('#ppip').classList.toggle('hide',!document.pictureInPictureEnabled);
@@ -808,22 +846,25 @@ function play(ctx,alt){
   if(hasEpg){epgGet(ctx.it.id,false).then(l=>{if(!l||!playCtx||playCtx.it!==ctx.it)return;const{now,next}=nowNext(l);$('#psub').textContent=now?`Agora: ${now.t} (${hm(now.s)}–${hm(now.e)})`+(next?`  •  Depois: ${next.t}`:''):''});if(!$('#pepg').classList.contains('hide'))epgLoad()}else $('#pepg').classList.add('hide');$('#pnext').textContent=ctx.live?'▶':'Próximo ▶';stop();
   const E=ENG,raw=(E==='mpegts'&&ctx.live&&/\.m3u8/i.test(ctx.url))?ctx.url.replace(/\.m3u8.*$/i,'.ts'):ctx.url,url=px(raw),isHls=/\.m3u8(\?|$)/i.test(raw)||(ctx.live&&!/\.ts(\?|$)/i.test(raw));
   const err=m=>{$('#perr').textContent=m};
+  $('#tcbar').classList.toggle('hide',!ctx.tc);$('#player').classList.toggle('tc',!!ctx.tc);
+  if(ctx.tc){tcStart(ctx);return}
   const h=ctx.fromStart?null:hist()[fkey(ctx.it)];
   const resume=()=>{if(ctx.startAt)V.currentTime=ctx.startAt;else if(RESUME&&!ctx.live&&h&&h.pos>30&&h.dur&&h.pos<h.dur*.95)V.currentTime=h.pos};
   V.onloadedmetadata=resume;
   if(E==='native'){V.src=url;V.play().catch(()=>{})}
   else if(E==='shaka'&&isHls&&window.shaka&&shaka.Player.isBrowserSupported()){startShaka(url,ctx,err,h)}
   else if(isHls&&window.Hls&&Hls.isSupported()&&E!=='mpegts'){
-    hls=new Hls({maxBufferLength:30,lowLatencyMode:false});hls.loadSource(url);hls.attachMedia(V);
+    hls=new Hls({maxBufferLength:30,lowLatencyMode:false,manifestLoadingMaxRetry:ctx.triedHls?0:1});hls.loadSource(url);hls.attachMedia(V);
     hls.on(Hls.Events.MANIFEST_PARSED,()=>V.play().catch(()=>{}));
     let netRetry=0;
     hls.on(Hls.Events.ERROR,(_,d)=>{if(!d.fatal)return;
+      if(!ctx.live&&ctx.triedHls&&d.type===Hls.ErrorTypes.NETWORK_ERROR&&tcFallback(ctx)){try{hls.destroy()}catch{}hls=null;return}
       if(d.type===Hls.ErrorTypes.NETWORK_ERROR){
         if(netRetry<2){netRetry++;setTimeout(()=>{if(hls)hls.startLoad()},1500);return}
         if(ctx.live&&!alt){hls.destroy();hls=null;const ts=raw.replace(/\.m3u8.*$/,'.ts');play({...ctx,url:ts},true);return}
       }
       if(d.type===Hls.ErrorTypes.MEDIA_ERROR){hls.recoverMediaError();return}
-      err(ctx.live?'Não foi possível reproduzir este canal.':'Formato não suportado pelo navegador (ex.: MKV/AVI). Tente outro título.')});
+      if(!ctx.live&&tcFallback(ctx))return;err(ctx.live?'Não foi possível reproduzir este canal.':'Formato não suportado pelo navegador (ex.: MKV/AVI). Tente outro título.')});
   }else if(isHls&&V.canPlayType('application/vnd.apple.mpegurl')){V.src=url;V.play().catch(()=>{})}
   else if(/\.ts(\?|$)/i.test(raw)&&window.mpegts&&mpegts.getFeatureList().mseLivePlayback){
     mpg=mpegts.createPlayer({type:'mpegts',isLive:true,url});mpg.attachMediaElement(V);mpg.load();mpg.play();
@@ -831,21 +872,22 @@ function play(ctx,alt){
   }else{V.src=url;V.play().catch(()=>{})}
   V.onerror=()=>{if(hls||mpg)return;
     if(!ctx.live&&!ctx.triedHls&&acc.mode==='x'&&!/\.m3u8(\?|$)/i.test(ctx.url)&&window.Hls&&Hls.isSupported()){
-      play({...ctx,url:ctx.url.replace(/\.[a-z0-9]+(\?.*)?$/i,'.m3u8'),triedHls:true,startAt:ctx.startAt||0});return}
+      play({...ctx,orig:ctx.orig||ctx.url,url:ctx.url.replace(/\.[a-z0-9]+(\?.*)?$/i,'.m3u8'),triedHls:true,startAt:ctx.startAt||0});return}
+    if(tcFallback(ctx))return;
     err(ctx.live?'Canal indisponível no momento. Tente outro canal.':'Formato não suportado pelo navegador (ex.: MKV/AVI). Tente outro título.')};
   mediaInfo(ctx);wlOn();favSync();applyFit(fitMode);
   if(FSE()){clearTimeout(idleT);idleT=setTimeout(()=>{if(!V.paused&&!panelsOpen())setIdle(true)},1200)}
 }
-function saveProg(){if(!playCtx||playCtx.live||!V.duration||V.currentTime<5)return;
+function saveProg(){if(!playCtx||playCtx.live||!durT()||!isFinite(durT())||curT()<5)return;
   const H=hist(),it=playCtx.it,k=fkey(it);
-  H[k]={id:it.id,name:it.name,img:it.img,type:it.type,ext:it.ext,url:playCtx.url,cat:it.cat,pos:V.currentTime,dur:V.duration,ts:Date.now(),title:playCtx.title,seriesId:playCtx.series?.id};
+  H[k]={id:it.id,name:it.name,img:it.img,type:it.type,ext:it.ext,url:playCtx.orig||playCtx.url,cat:it.cat,pos:curT(),dur:durT(),ts:Date.now(),title:playCtx.title,seriesId:playCtx.series?.id};
   LS.set(pk('hist'),H)}
 V.ontimeupdate=()=>{if(Date.now()-saveT>5000){saveT=Date.now();saveProg()}};
 V.onended=()=>{saveProg();if(playCtx?.next&&(playCtx.live||AUTONEXT))playCtx.next()};
 $('#pnext').onclick=()=>playCtx?.next&&playCtx.next();
 $('#pprev').onclick=()=>playCtx?.prev&&playCtx.prev();
 $('#pclose').onclick=closePlayer;
-function closePlayer(){saveProg();stop();playCtx=null;closePanels();wlOff();clearTimeout(idleT);$('#player').classList.remove('idle');V.controls=true;$('#player').classList.add('hide');if(['hist','movie','series','home'].includes(tab))render()}
+function closePlayer(){saveProg();stop();playCtx=null;closePanels();wlOff();clearTimeout(idleT);$('#player').classList.remove('idle');V.controls=true;$('#player').classList.add('hide');$('#tcbar').classList.add('hide');$('#player').classList.remove('tc');if(['hist','movie','series','home'].includes(tab))render()}
 /* ---------- painel de categorias dentro do player ---------- */
 let plType='live',plList=[],plShown=0;
 const plCurId=()=>playCtx?(playCtx.series?playCtx.series.id:playCtx.it.id):'';
@@ -914,7 +956,7 @@ async function startShaka(url,ctx,err,h){
 }
 function setEng(v){
   ENG=v;LS.set('eng',v);toast('Reprodutor: '+ENGS.find(e=>e[0]===v)[1]);
-  if(playCtx){const c=playCtx;play({...c,startAt:c.live?0:V.currentTime});setTimeout(()=>{if(!$('#pset').classList.contains('hide'))setBuild()},1500)}
+  if(playCtx){const c=playCtx;play({...c,startAt:c.live?0:curT()});setTimeout(()=>{if(!$('#pset').classList.contains('hide'))setBuild()},1500)}
 }
 
 /* ---------- favoritar pelo player ---------- */
@@ -993,20 +1035,20 @@ $('#subf').onchange=async e=>{
   tr.track.mode='showing';setBuild();
 };
 $('#psbtn').onclick=()=>{const P=$('#pset');if(!P.classList.contains('hide')){P.classList.add('hide');return}$('#plist').classList.add('hide');$('#pepg').classList.add('hide');setBuild();P.classList.remove('hide')};
-$('#pb10').onclick=()=>{V.currentTime=Math.max(0,V.currentTime-10)};
-$('#pf10').onclick=()=>{V.currentTime+=10};
+$('#pb10').onclick=()=>seekBy(-10);
+$('#pf10').onclick=()=>seekBy(10);
 $('#ppip').onclick=()=>{if(document.pictureInPictureElement)document.exitPictureInPicture();else if(V.requestPictureInPicture)V.requestPictureInPicture().catch(()=>{})};
 V.addEventListener('dblclick',e=>{
   e.preventDefault();const r=V.getBoundingClientRect(),x=(e.clientX-r.left)/r.width;
-  if(!playCtx?.live&&x<.33)V.currentTime=Math.max(0,V.currentTime-10);
-  else if(!playCtx?.live&&x>.67)V.currentTime+=10;
+  if(!playCtx?.live&&x<.33)seekBy(-10);
+  else if(!playCtx?.live&&x>.67)seekBy(10);
   else toggleFS();
 });
 
 /* ---------- controles que somem sozinhos (em tela cheia: bem rápido e tela limpa) ---------- */
 let idleT=0,lastMX=-99,lastMY=-99;
 const idleMs=()=>FSE()?1500:3500;
-function setIdle(on){$('#player').classList.toggle('idle',on);V.controls=!on&&!(playCtx&&playCtx.live)}
+function setIdle(on){$('#player').classList.toggle('idle',on);V.controls=!on&&!(playCtx&&(playCtx.live||playCtx.tc))}
 function wake(){
   setIdle(false);clearTimeout(idleT);
   if(!$('#player').classList.contains('hide')&&!V.paused)idleT=setTimeout(()=>{if(!panelsOpen()&&!V.paused)setIdle(true)},idleMs());
@@ -1032,8 +1074,8 @@ function mediaInfo(ctx){
     ms.metadata=new MediaMetadata({title:ctx.title,artist:'IPTV PREMIUM',artwork:ctx.it.img?[{src:ctx.it.img}]:[]});
     ms.setActionHandler('play',()=>V.play());ms.setActionHandler('pause',()=>V.pause());
     ms.setActionHandler('previoustrack',ctx.prev||null);ms.setActionHandler('nexttrack',ctx.next||null);
-    ms.setActionHandler('seekbackward',ctx.live?null:()=>{V.currentTime-=10});
-    ms.setActionHandler('seekforward',ctx.live?null:()=>{V.currentTime+=10});
+    ms.setActionHandler('seekbackward',ctx.live?null:()=>seekBy(-10));
+    ms.setActionHandler('seekforward',ctx.live?null:()=>seekBy(10));
   }catch{}
 }
 
@@ -1045,7 +1087,7 @@ setInterval(()=>{
     if(wd.tries<6){wd.tries++;$('#perr').textContent='Reconectando…';play({...playCtx})}
     else $('#perr').textContent='Canal sem sinal. Tente outro canal.';}
 },3000);
-V.addEventListener('playing',()=>{if(['Reconectando…',tr('Reconectando…')].includes($('#perr').textContent))$('#perr').textContent='';clearTimeout(wd.rt);wd.rt=setTimeout(()=>{wd.tries=0},30000)});
+V.addEventListener('playing',()=>{if(isTc())$('#perr').textContent='';if(['Reconectando…',tr('Reconectando…')].includes($('#perr').textContent))$('#perr').textContent='';clearTimeout(wd.rt);wd.rt=setTimeout(()=>{wd.tries=0},30000)});
 
 /* ---------- teclado / controle remoto (setas, OK, voltar) ---------- */
 const isBack=e=>e.key==='Escape'||e.key==='GoBack'||e.key==='BrowserBack'||e.keyCode===10009||e.keyCode===461||e.keyCode===4;
@@ -1096,8 +1138,8 @@ document.addEventListener('keydown',e=>{
       if(k==='Enter'&&live&&tag!=='BUTTON'){plToggle();return}
       if(k==='ArrowUp'||k==='ChannelUp'||k==='PageUp'||k==='MediaTrackPrevious'){e.preventDefault();if(live)playCtx.prev&&playCtx.prev();else if(k==='ArrowUp')V.volume=Math.min(1,V.volume+.1);return}
       if(k==='ArrowDown'||k==='ChannelDown'||k==='PageDown'||k==='MediaTrackNext'){e.preventDefault();if(live)playCtx.next&&playCtx.next();else if(k==='ArrowDown')V.volume=Math.max(0,V.volume-.1);return}
-      if(k==='ArrowRight'&&!live){e.preventDefault();V.currentTime+=e.shiftKey?60:10;return}
-      if(k==='ArrowLeft'&&!live){e.preventDefault();V.currentTime=Math.max(0,V.currentTime-(e.shiftKey?60:10));return}
+      if(k==='ArrowRight'&&!live){e.preventDefault();seekBy(e.shiftKey?60:10);return}
+      if(k==='ArrowLeft'&&!live){e.preventDefault();seekBy(-(e.shiftKey?60:10));return}
       if(k==='ArrowLeft'&&live&&tv){plToggle();return}
       if(k==='m'||k==='M'){V.muted=!V.muted;return}
       return;

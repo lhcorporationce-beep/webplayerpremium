@@ -10,6 +10,8 @@
  *   ALLOWED_HOSTS   (recomendado) hosts IPTV permitidos, separados por vírgula
  *                   ex: ALLOWED_HOSTS=meuservidor.com,painel.meuservidor.com
  *   ALLOW_PRIVATE   1 = permite IPs internos (só para testes)
+ *   FFMPEG          caminho do ffmpeg (padrão: ffmpeg). Usado para converter filmes MKV/AVI/HEVC.
+ *   MAX_TRANSCODES  conversões simultâneas (padrão 2)
  */
 const http = require('http');
 const https = require('https');
@@ -18,6 +20,7 @@ const path = require('path');
 const dns = require('dns');
 const net = require('net');
 const { URL } = require('url');
+const { spawn, spawnSync } = require('child_process');
 
 const PORT = process.env.PORT || 3000;
 const ALLOWED = (process.env.ALLOWED_HOSTS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
@@ -130,9 +133,84 @@ function upstream(target, req, res, hops) {
   up.end();
 }
 
+
+/* ---------- conversão de filmes (ffmpeg) ---------- */
+const FFMPEG = process.env.FFMPEG || 'ffmpeg';
+const MAX_TC = Math.max(1, parseInt(process.env.MAX_TRANSCODES || '2', 10) || 2);
+const HAS_FFMPEG = (() => { try { return spawnSync(FFMPEG, ['-version'], { timeout: 5000 }).status === 0; } catch { return false; } })();
+let tcActive = 0;
+const infoCache = new Map();
+// o ffmpeg lê o filme pela própria ponte (/p), então herda todas as proteções (hosts permitidos, IP privado, Range)
+const localUrl = t => 'http://127.0.0.1:' + PORT + '/p?u=' + encodeURIComponent(t);
+function checkTarget(t) {
+  let u; try { u = new URL(t); } catch { return 'URL inválida'; }
+  if (!/^https?:$/.test(u.protocol)) return 'Protocolo não permitido';
+  const AL = allowedHosts();
+  if (AL.length && !AL.includes(u.hostname.toLowerCase())) return 'Servidor não permitido';
+  return null;
+}
+function sameOrigin(req) {
+  const o = req.headers.origin; if (!o) return true;
+  try { return new URL(o).host === req.headers.host; } catch { return false; }
+}
+function probe(t) {
+  const hit = infoCache.get(t);
+  if (hit && Date.now() - hit.t < 600000) return Promise.resolve(hit.v);
+  return new Promise((resolve, reject) => {
+    const p = spawn(FFMPEG, ['-hide_banner', '-nostdin', '-i', localUrl(t)], { stdio: ['ignore', 'ignore', 'pipe'] });
+    let err = ''; const kill = setTimeout(() => p.kill('SIGKILL'), 25000);
+    p.stderr.on('data', d => { if (err.length < 60000) err += d; });
+    p.on('error', reject);
+    p.on('close', () => {
+      clearTimeout(kill);
+      const d = /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/.exec(err);
+      const vl = /Stream #\d+:\d+[^\n]*?: Video: ([a-z0-9_]+)[^\n]*/i.exec(err);
+      const v = vl && [vl[0], vl[1], (/,\s*(yuv\w+|nv\d+|gbr\w+|p0\d+\w*|rgb\w+|gray\w*)/i.exec(vl[0]) || [])[1]];
+      if (!v) return reject(new Error('sem vídeo'));
+      const out = { dur: d ? (+d[1] * 3600 + +d[2] * 60 + +d[3]) : 0, vcodec: v[1].toLowerCase(), pix: (v[2] || '').toLowerCase() };
+      infoCache.set(t, { t: Date.now(), v: out });
+      resolve(out);
+    });
+  });
+}
+function handleTc(url, req, res) {
+  if (!HAS_FFMPEG) return sendErr(res, 501, 'Conversão indisponível (ffmpeg não instalado no servidor)');
+  if (!sameOrigin(req)) return sendErr(res, 403, 'Origem não permitida');
+  const t = url.searchParams.get('u'); if (!t) return sendErr(res, 400, 'Falta o parâmetro u');
+  const bad = checkTarget(t); if (bad) return sendErr(res, 403, bad);
+  if (url.pathname === '/t/info') {
+    return probe(t).then(v => { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(v)); })
+      .catch(() => sendErr(res, 502, 'Não foi possível ler o arquivo de vídeo'));
+  }
+  if (tcActive >= MAX_TC) return sendErr(res, 429, 'Servidor ocupado convertendo outros filmes. Tente de novo em instantes.');
+  const ss = Math.max(0, Math.floor(+url.searchParams.get('ss') || 0));
+  tcActive++;
+  probe(t).then(info => {
+    if (res.destroyed || res.writableEnded) { tcActive--; return; }
+    // copia o vídeo se já for H.264 8 bits (quase sem CPU); senão converte e limita a 720p
+    const copy = info.vcodec === 'h264' && (!info.pix || info.pix === 'yuv420p' || info.pix === 'yuvj420p');
+    const args = ['-hide_banner', '-loglevel', 'error', '-nostdin'];
+    if (ss) args.push('-ss', String(ss));
+    args.push('-i', localUrl(t), '-map', '0:v:0', '-map', '0:a:0?', '-sn', '-dn');
+    if (copy) args.push('-c:v', 'copy');
+    else args.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p', '-profile:v', 'high', '-vf', "scale=-2:'min(720,ih)'");
+    args.push('-c:a', 'aac', '-b:a', '160k', '-ac', '2', '-f', 'mp4', '-movflags', 'frag_keyframe+empty_moov+default_base_moof', 'pipe:1');
+    const p = spawn(FFMPEG, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let done = false; const fin = () => { if (!done) { done = true; tcActive--; } };
+    res.writeHead(200, { 'Content-Type': 'video/mp4', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' });
+    p.stdout.pipe(res);
+    p.stderr.on('data', d => console.log('[ffmpeg]', String(d).trim().slice(0, 200)));
+    p.on('close', () => { fin(); res.end(); });
+    p.on('error', () => { fin(); res.destroy(); });
+    res.on('close', () => { p.kill('SIGKILL'); fin(); });
+  }).catch(() => { tcActive--; sendErr(res, 502, 'Não foi possível ler o arquivo de vídeo'); });
+}
+
 http.createServer((req, res) => {
   const url = new URL(req.url, 'http://x');
   if (url.pathname === '/healthz') { res.writeHead(200); return res.end('ok'); }
+
+  if (url.pathname === '/t' || url.pathname === '/t/info') return handleTc(url, req, res);
 
   if (url.pathname === '/p') {
     if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Range', 'Access-Control-Allow-Methods': 'GET' }); return res.end(); }
@@ -156,4 +234,4 @@ http.createServer((req, res) => {
       res.end(data);
     });
   });
-}).listen(PORT, () => console.log('IPTV Premium Player em http://localhost:' + PORT + (allowedHosts().length ? ' (hosts: ' + allowedHosts().join(',') + ')' : ' (ATENÇÃO: defina servers.json ou ALLOWED_HOSTS)')));
+}).listen(PORT, () => console.log('IPTV Premium Player em http://localhost:' + PORT + (allowedHosts().length ? ' (hosts: ' + allowedHosts().join(',') + ')' : ' (ATENÇÃO: defina servers.json ou ALLOWED_HOSTS)') + (HAS_FFMPEG ? ' • conversão de filmes: ativa' : ' • conversão de filmes: indisponível (sem ffmpeg)')));

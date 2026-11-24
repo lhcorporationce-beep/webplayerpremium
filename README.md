@@ -41,3 +41,11 @@ Controle remoto: setas, OK, Voltar; teclas de canal/mídia também funcionam.
 - **Controle dos pais**: ativa uma senha de 4 números. Categorias e títulos adultos (nomes como Adultos, XXX, +18, Hentai etc., mais palavras extras que você definir) ficam escondidos em todas as telas, busca, favoritos e histórico. "Desbloquear" pede a senha e vale até fechar a aba. Alterar/desativar também pedem a senha.
   É um bloqueio familiar: quem limpar os dados do navegador remove a senha.
 - **Dados**: atualizar catálogo, limpar cache/histórico/favoritos. **Conta**: trocar perfil/servidor.
+
+## Conversão de filmes (MKV/AVI/HEVC)
+Quando um filme não toca direto no navegador, o player tenta nesta ordem: arquivo original → HLS (.m3u8) → **conversão no servidor com ffmpeg**.
+- O ffmpeg vem instalado no Docker (`Dockerfile`). Sem ffmpeg (ex.: `node server.js` puro) a conversão fica indisponível.
+- Vídeo H.264 de 8 bits é só copiado (quase sem CPU); outros (HEVC etc.) são convertidos para H.264 até 720p. O áudio vai para AAC.
+- Durante a conversão, a barra de tempo é a própria do app (arrastar ou ±10 s recarrega a partir do ponto escolhido).
+- `MAX_TRANSCODES` (padrão 2) limita conversões simultâneas; acima disso o servidor responde "ocupado". Conversão de vídeo não-H.264 usa bastante CPU: em VPS pequena, poucos filmes ao mesmo tempo.
+- Dá para desligar em ⚙ Configurações → "Converter formatos não suportados".
