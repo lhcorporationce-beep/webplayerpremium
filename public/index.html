@@ -1003,9 +1003,9 @@ $('#pfav').onclick=()=>{const t=favTarget();if(!t)return;toggleFav(t);favSync()}
 
 /* ---------- formato (proporção) da imagem ---------- */
 const FITS=[['contain','Original'],['cover','Preencher a tela'],['fill','Esticar'],['16/9','16:9'],['4/3','4:3'],['21/9','21:9']];
-let fitMode=LS.get('fit','contain');if(!FITS.some(f=>f[0]===fitMode))fitMode='contain';
+let fitMode=LS.get('fit2','16/9');if(!FITS.some(f=>f[0]===fitMode))fitMode='16/9';
 function applyFit(m){
-  fitMode=m;LS.set('fit',m);
+  fitMode=m;LS.set('fit2',m);
   if(m.includes('/')){
     const [a,b]=m.split('/').map(Number),r=a/b,P=$('#player'),W=P.clientWidth,H=P.clientHeight;
     const w=Math.min(W,H*r);V.style.objectFit='fill';V.style.flex='none';V.style.width=w+'px';V.style.height=(w/r)+'px';V.style.alignSelf='center';
