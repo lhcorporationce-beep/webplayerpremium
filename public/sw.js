@@ -1,5 +1,5 @@
 // Service worker: guarda só o "casco" do app. Vídeo, API e servers.json nunca passam por aqui.
-const V = 'iptvp-v11';
+const V = 'iptvp-v12';
 const SHELL = ['/', '/logo.png', '/icon.png', '/favicon.png', '/manifest.webmanifest', '/vendor/hls.min.js', '/vendor/mpegts.js', '/vendor/shaka.js', '/i18n.js'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(V).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()).catch(() => self.skipWaiting()));
