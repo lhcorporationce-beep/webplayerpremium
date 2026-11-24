@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: iptv-premium-player
+    runtime: node
+    plan: starter
+    buildCommand: echo ok
+    startCommand: node server.js
+    healthCheckPath: /healthz
+    envVars:
+      - key: ALLOWED_HOSTS
+        sync: false   # você digita no painel: o domínio do seu servidor IPTV

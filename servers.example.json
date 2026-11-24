@@ -1,0 +1,7 @@
+{
+  "servers": [
+    { "name": "Servidor 1", "url": "http://servidor1.seudominio.com:8080" },
+    { "name": "Servidor 2", "url": "http://servidor2.seudominio.com:8080" },
+    { "name": "Servidor 3", "url": "http://servidor3.seudominio.com:25461" }
+  ]
+}
