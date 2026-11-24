@@ -36,8 +36,10 @@ function allowedHosts() {
       _sv.hosts = (j.servers || []).map(x => { try { return new URL(/^https?:\/\//.test(x.url) ? x.url : 'http://' + x.url).hostname.toLowerCase(); } catch { return null; } }).filter(Boolean);
     } catch { _sv.hosts = []; }
   }
-  return ALLOWED.concat(_sv.hosts);
+  return ALLOWED.concat(_sv.hosts, [...LEARNED]);
 }
+// hosts para onde um servidor permitido redireciona (CDN/nó de streaming); IPs internos continuam bloqueados
+const LEARNED = new Set();
 const UA = 'VLC/3.0.20 LibVLC/3.0.20';
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json' };
 
@@ -85,7 +87,7 @@ function upstream(target, req, res, hops) {
   if (!/^https?:$/.test(u.protocol)) return sendErr(res, 400, 'Protocolo não permitido');
   const host = u.hostname.toLowerCase();
   const AL = allowedHosts();
-  if (AL.length && !AL.includes(host)) return sendErr(res, 403, 'Servidor não permitido');
+  if (AL.length && hops === 0 && !AL.includes(host)) return sendErr(res, 403, 'Servidor não permitido');
 
   const bare = host.replace(/^\[|\]$/g, '');
   if (net.isIP(bare) && !ALLOW_PRIVATE && isPrivateIp(bare)) return sendErr(res, 403, 'Endereço não permitido');
@@ -102,6 +104,7 @@ function upstream(target, req, res, hops) {
     if ([301, 302, 303, 307, 308].includes(r.statusCode) && r.headers.location) {
       r.resume();
       if (hops >= 6) return sendErr(res, 508, 'Redirecionamentos demais');
+      try { const nh = new URL(r.headers.location, u).hostname.toLowerCase(); if (LEARNED.size < 50) LEARNED.add(nh); } catch {}
       return upstream(new URL(r.headers.location, u).href, req, res, hops + 1);
     }
     const ct = String(r.headers['content-type'] || '');
@@ -115,6 +118,7 @@ function upstream(target, req, res, hops) {
       r.on('end', () => {
         const body = Buffer.concat(chunks).toString('utf8');
         if (!body.trimStart().startsWith('#EXTM3U')) { res.writeHead(r.statusCode, { ...out }); return res.end(body); }
+        for (const m of body.matchAll(/https?:\/\/([^\/:\s"']+)/g)) if (LEARNED.size < 50) LEARNED.add(m[1].toLowerCase());
         const txt = rewriteM3u8(body, u.href);
         out['content-type'] = 'application/vnd.apple.mpegurl';
         res.writeHead(r.statusCode, out); res.end(txt);
