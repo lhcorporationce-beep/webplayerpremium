@@ -256,7 +256,7 @@ async function jget(u){
     throw new Error('HTTP '+r.status+(m&&!/^</.test(m)?' - '+m:''))}
   const t=await r.text();
   try{return JSON.parse(t)}catch{
-    throw new Error(/^\s*</.test(t)?'O servidor respondeu uma página da web em vez de dados. Confira a URL e a porta, ou se o servidor bloqueia este site.':'Resposta inválida do servidor IPTV.')}
+    throw new Error(/^\s*</.test(t)?'O servidor respondeu uma página da web em vez de dados. Confira a URL e a porta, ou se o servidor bloqueia este site.'+((t.match(/<title[^>]*>([^<]{1,80})/i)||[])[1]?' (Página recebida: '+t.match(/<title[^>]*>([^<]{1,80})/i)[1].trim()+')':''):'Resposta inválida do servidor IPTV.')}
 }
 async function tget(u){const r=await fetch(px(u));if(!r.ok)throw new Error('HTTP '+r.status);return r.text()}
 // imagens http dentro de site https são bloqueadas pelo navegador: passa pela ponte

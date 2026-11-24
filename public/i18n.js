@@ -121,6 +121,7 @@ const L={
  es:{all:'Todos',now:'Ahora',img:'Imagen',eng:'Reproductor',cont:'Continuar',watch:'Ver',season:'Temporada',exp:'Vence',screens:'Pantallas simultáneas',upd:'Catálogo actualizado el',err:'Error',errl:'Error al cargar',track:'Pista',on:'activado',off:'desactivado',acc:'Cuenta',ep:'Episodio',http:'Error HTTP'}
 };
 window.I18N_RULES=[
+ [/^(O servidor respondeu uma página da web[^(]*)\(Página recebida: (.*)\)$/,(r,l,d)=>T(d,r[1].trim())+' ('+(l==='en'?'Page received: ':'Página recibida: ')+r[2]+')'],
  [/^Todos \((\d+)\)$/,(r,l)=>L[l].all+' ('+r[1]+')'],
  [/^Agora: (.*)$/,(r,l)=>L[l].now+': '+r[1]],
  [/^Imagem: (.*)$/,(r,l,d)=>L[l].img+': '+T(d,r[1])],

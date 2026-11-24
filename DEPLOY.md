@@ -51,3 +51,10 @@ HTTPS automático com Caddy (aponte o domínio para o IP da VPS antes):
 3. Se algo falhar, veja os logs (Render: aba Logs; VPS: `docker logs player`).
    - "Servidor não permitido": o domínio não está em `ALLOWED_HOSTS`.
    - "Não foi possível conectar": confira endereço e porta do painel.
+
+## VPS com script pronto (recomendado quando o servidor IPTV bloqueia o Render)
+1. Contrate uma VPS Ubuntu 22.04/24.04 (de preferência no Brasil).
+2. Conecte por SSH (`ssh root@IP-DA-VPS`) e teste antes: `curl -s "http://SERVIDOR/player_api.php?username=USUARIO&password=SENHA" | head -c 200`. Se vier JSON, o IP da VPS não está bloqueado.
+3. Rode: `curl -fsSL https://raw.githubusercontent.com/lhcorporationce-beep/webplayerpremium/main/deploy/vps-install.sh -o i.sh && ALLOWED_HOSTS=tcat2g.cc bash i.sh`
+   Com domínio (HTTPS): `DOMAIN=player.seudominio.com ALLOWED_HOSTS=tcat2g.cc bash i.sh` (aponte antes o registro A do domínio para o IP da VPS).
+4. Para atualizar: rode o mesmo comando de novo.
