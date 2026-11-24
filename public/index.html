@@ -248,7 +248,16 @@ let AUTONEXT=LS.get('autonext',true), RESUME=LS.get('resume',true);
 const pk=k=>`${k}_${acc?btoa(unescape(encodeURIComponent((acc.server||acc.m3u||'')+(acc.user||'')))).slice(0,16):''}_${cur}`;
 const favs=()=>LS.get(pk('fav'),{}), hist=()=>LS.get(pk('hist'),{});
 const px=u=>'/p?u='+encodeURIComponent(u);
-async function jget(u){const r=await fetch(px(u));if(!r.ok)throw new Error('HTTP '+r.status);return r.json()}
+async function jget(u){
+  const r=await fetch(px(u));
+  if(!r.ok){let m='';try{m=(await r.text()).trim().slice(0,120)}catch{}
+    if(r.status===403)throw new Error(m||'Servidor não permitido');
+    if(r.status===502)throw new Error('Não foi possível conectar ao servidor IPTV. Confira o endereço e a porta.');
+    throw new Error('HTTP '+r.status+(m&&!/^</.test(m)?' - '+m:''))}
+  const t=await r.text();
+  try{return JSON.parse(t)}catch{
+    throw new Error(/^\s*</.test(t)?'O servidor respondeu uma página da web em vez de dados. Confira a URL e a porta, ou se o servidor bloqueia este site.':'Resposta inválida do servidor IPTV.')}
+}
 async function tget(u){const r=await fetch(px(u));if(!r.ok)throw new Error('HTTP '+r.status);return r.text()}
 // imagens http dentro de site https são bloqueadas pelo navegador: passa pela ponte
 const im=u=>{u=u||'';return(location.protocol==='https:'&&u.startsWith('http:'))?px(u):u};
