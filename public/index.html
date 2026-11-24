@@ -598,29 +598,32 @@ function parseM3U(t){
 }
 
 /* ---------- render ---------- */
-$$('#nav button').forEach(b=>b.onclick=()=>{tab=b.dataset.t;cat='all';$('#q').value='';$$('#nav button').forEach(x=>x.classList.toggle('on',x===b));render()});
+$$('#nav button').forEach(b=>b.onclick=()=>{tab=b.dataset.t;cat='all';favT='all';$('#q').value='';$$('#nav button').forEach(x=>x.classList.toggle('on',x===b));render()});
 let qT=0;$('#q').oninput=()=>{clearTimeout(qT);qT=setTimeout(render,250)};
 let renderN=0;
+let favT='all',favCnt={};
 function render(){
   const q=$('#q').value.trim().toLowerCase();const F=favs(),H=hist();
   if(guideIO){guideIO.disconnect();guideIO=null}
   if(tab==='home'){renderHome(q);return}
   if(tab==='guide'&&acc.mode!=='x'){$('#cats').style.display='none';$('#content').innerHTML='<div class="empty">O guia de programação está disponível para contas Xtream.</div>';return}
   let items,catList=null;
-  if(tab==='fav'){items=Object.values(F).filter(x=>!pcHide(x)).filter(x=>!q||x.name.toLowerCase().includes(q))}
+  if(tab==='fav'){items=Object.values(F).filter(x=>!pcHide(x));favCnt={all:items.length};for(const t of ['live','movie','series'])favCnt[t]=items.filter(x=>x.type===t).length;
+    if(favT!=='all')items=items.filter(x=>x.type===favT);items=items.filter(x=>!q||x.name.toLowerCase().includes(q))}
   else if(tab==='hist'){items=Object.values(H).sort((a,b)=>b.ts-a.ts).filter(x=>!pcHide(x)).filter(x=>!q||x.name.toLowerCase().includes(q))}
   else{const src=tab==='guide'?'live':tab;catList=D.cats[src];items=D[src];
-    if(cat!=='all')items=items.filter(x=>x.cat===cat);
+    if(cat==='__fav')items=items.filter(x=>F[fkey(x)]);else if(cat!=='all')items=items.filter(x=>x.cat===cat);
     if(q)items=items.filter(x=>x.name.toLowerCase().includes(q))}
   // sidebar
   const A=$('#cats');
-  if(catList){A.style.display='';A.innerHTML=`<button class="cat ${cat==='all'?'on':''}" data-c="all">Todos (${D[tab==='guide'?'live':tab].length})</button>`+catList.map(c=>`<button class="cat ${cat===String(c.category_id)?'on':''}" data-c="${esc(c.category_id)}">${esc(c.category_name)}</button>`).join('');
+  if(catList){A.style.display='';A.innerHTML=`<button class="cat ${cat==='all'?'on':''}" data-c="all">Todos (${D[tab==='guide'?'live':tab].length})</button><button class="cat ${cat==='__fav'?'on':''}" data-c="__fav">⭐ Favoritos (${D[tab==='guide'?'live':tab].filter(x=>F[fkey(x)]).length})</button>`+catList.map(c=>`<button class="cat ${cat===String(c.category_id)?'on':''}" data-c="${esc(c.category_id)}">${esc(c.category_name)}</button>`).join('');
     $$('.cat').forEach(b=>b.onclick=()=>{cat=b.dataset.c;render()})}
   else{A.style.display='none';A.innerHTML=''}
   const C=$('#content');
   let head='';
-  if(catList)head=`<select class="catsel" id="csel"><option value="all">Todas as categorias</option>${catList.map(c=>`<option value="${esc(c.category_id)}" ${cat===String(c.category_id)?'selected':''}>${esc(c.category_name)}</option>`).join('')}</select>`;
-  if(!items.length){C.innerHTML=head+`<div class="empty">${tab==='fav'?'Nenhum favorito ainda. Toque na ⭐ de um item.':tab==='hist'?'Nada assistido ainda.':'Nada encontrado.'}</div>`;bindSel();return}
+  if(tab==='fav')head='<div class="stabs favt">'+[['all','Todos'],['live','Canais'],['movie','Filmes'],['series','Séries']].map(([k,l])=>`<button class="${favT===k?'on':''}" data-ft="${k}">${l} (${favCnt[k]||0})</button>`).join('')+'</div>';
+  if(catList)head=`<select class="catsel" id="csel"><option value="all">Todas as categorias</option><option value="__fav" ${cat==='__fav'?'selected':''}>⭐ Favoritos</option>${catList.map(c=>`<option value="${esc(c.category_id)}" ${cat===String(c.category_id)?'selected':''}>${esc(c.category_name)}</option>`).join('')}</select>`;
+  if(!items.length){C.innerHTML=head+`<div class="empty">${tab==='fav'||cat==='__fav'?'Nenhum favorito aqui ainda. Toque na ⭐ de um item.':tab==='hist'?'Nada assistido ainda.':'Nada encontrado.'}</div>`;bindSel();return}
   const isGuide=tab==='guide';
   const isList=(tab==='live')||isGuide||(tab==='fav'&&items.every(i=>i.type==='live'));
   C.innerHTML=head+`<div class="${isList?'list':'grid'}" id="g"></div><div id="more" class="spin hide"></div>`;
@@ -634,7 +637,7 @@ function render(){
   const io=new IntersectionObserver(e=>{if(e[0].isIntersecting&&idx<items.length)chunk()},{root:C,rootMargin:'400px'});io.observe($('#more'));
   if(isList&&!isGuide)loadEpgBatch(g);
 }
-function bindSel(){const s=$('#csel');if(s)s.onchange=()=>{cat=s.value;render()}}
+function bindSel(){const s=$('#csel');if(s)s.onchange=()=>{cat=s.value;render()};$$('.favt button').forEach(b=>b.onclick=()=>{favT=b.dataset.ft;render()})}
 const fkey=i=>i.type+':'+i.id;
 function chRow(i,F){return `<div class="ch" tabindex="0" data-k="${fkey(i)}" data-e="${esc(i.id)}"><div class="lg" style="background-image:url('${esc(im(i.img))}')"></div><div class="in"><div class="nm">${esc(i.name)}</div><div class="ep" data-epg="${esc(i.id)}">${esc(i.catName||'')}</div></div><button class="star" data-s="${fkey(i)}">${F[fkey(i)]?'⭐':'☆'}</button></div>`}
 function cardEl(i,F,H){const h=H[fkey(i)];const pg=h&&h.dur?Math.min(100,h.pos/h.dur*100):0;
