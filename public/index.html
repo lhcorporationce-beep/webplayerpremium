@@ -823,13 +823,16 @@ function play(ctx,alt){
         if(ctx.live&&!alt){hls.destroy();hls=null;const ts=raw.replace(/\.m3u8.*$/,'.ts');play({...ctx,url:ts},true);return}
       }
       if(d.type===Hls.ErrorTypes.MEDIA_ERROR){hls.recoverMediaError();return}
-      err('Não foi possível reproduzir este canal.')});
+      err(ctx.live?'Não foi possível reproduzir este canal.':'Formato não suportado pelo navegador (ex.: MKV/AVI). Tente outro título.')});
   }else if(isHls&&V.canPlayType('application/vnd.apple.mpegurl')){V.src=url;V.play().catch(()=>{})}
   else if(/\.ts(\?|$)/i.test(raw)&&window.mpegts&&mpegts.getFeatureList().mseLivePlayback){
     mpg=mpegts.createPlayer({type:'mpegts',isLive:true,url});mpg.attachMediaElement(V);mpg.load();mpg.play();
     mpg.on(mpegts.Events.ERROR,()=>err('Erro no stream (.ts).'));
   }else{V.src=url;V.play().catch(()=>{})}
-  V.onerror=()=>{if(!hls&&!mpg)err(ctx.live?'Canal indisponível no momento. Tente outro canal.':'Formato não suportado pelo navegador (ex.: MKV/AVI). Tente outro título.')};
+  V.onerror=()=>{if(hls||mpg)return;
+    if(!ctx.live&&!ctx.triedHls&&acc.mode==='x'&&!/\.m3u8(\?|$)/i.test(ctx.url)&&window.Hls&&Hls.isSupported()){
+      play({...ctx,url:ctx.url.replace(/\.[a-z0-9]+(\?.*)?$/i,'.m3u8'),triedHls:true,startAt:ctx.startAt||0});return}
+    err(ctx.live?'Canal indisponível no momento. Tente outro canal.':'Formato não suportado pelo navegador (ex.: MKV/AVI). Tente outro título.')};
   mediaInfo(ctx);wlOn();favSync();applyFit(fitMode);
   if(FSE()){clearTimeout(idleT);idleT=setTimeout(()=>{if(!V.paused&&!panelsOpen())setIdle(true)},1200)}
 }
