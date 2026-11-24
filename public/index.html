@@ -820,10 +820,10 @@ function tcFallback(ctx){
   if(!TCON||ctx.live||ctx.tc||ctx.tcTried)return false;
   const orig=ctx.orig||ctx.url;
   $('#perr').textContent=tr('Convertendo o filme para o seu navegador…');
-  fetch('/t/info?u='+encodeURIComponent(orig)).then(r=>r.ok?r.json():Promise.reject(r.status)).then(j=>{
+  fetch('/t/info?u='+encodeURIComponent(orig)).then(r=>r.ok?r.json():r.text().then(x=>{let m='';try{m=JSON.parse(x).error||''}catch{m=x.slice(0,120)}return Promise.reject({st:r.status,m})})).then(j=>{
     if(!playCtx||playCtx.it!==ctx.it)return;
     play({...ctx,orig,tc:{dur:j.dur||0,base:ctx.startAt||0},tcTried:true,startAt:0});
-  }).catch(st=>{if(playCtx&&playCtx.it===ctx.it)$('#perr').textContent=tr(st===501?'Conversão indisponível neste servidor.':'Formato não suportado pelo navegador (ex.: MKV/AVI). Tente outro título.')});
+  }).catch(e=>{if(playCtx&&playCtx.it===ctx.it){const st=e&&e.st;$('#perr').textContent=st===501?tr('Conversão indisponível neste servidor.'):tr('Formato não suportado pelo navegador (ex.: MKV/AVI). Tente outro título.')+(st?' ['+st+(e.m?': '+e.m:'')+']':' [rede]')}});
   return true;
 }
 function tcStart(ctx){

@@ -166,7 +166,7 @@ function probe(t) {
       const d = /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/.exec(err);
       const vl = /Stream #\d+:\d+[^\n]*?: Video: ([a-z0-9_]+)[^\n]*/i.exec(err);
       const v = vl && [vl[0], vl[1], (/,\s*(yuv\w+|nv\d+|gbr\w+|p0\d+\w*|rgb\w+|gray\w*)/i.exec(vl[0]) || [])[1]];
-      if (!v) return reject(new Error('sem vídeo'));
+      if (!v) { const tail = err.trim().split('\n').slice(-3).join(' | ').slice(0, 300); console.log('[probe] falhou:', t.slice(0, 80), '→', tail); return reject(new Error(tail || 'sem vídeo')); }
       const out = { dur: d ? (+d[1] * 3600 + +d[2] * 60 + +d[3]) : 0, vcodec: v[1].toLowerCase(), pix: (v[2] || '').toLowerCase() };
       infoCache.set(t, { t: Date.now(), v: out });
       resolve(out);
@@ -180,7 +180,7 @@ function handleTc(url, req, res) {
   const bad = checkTarget(t); if (bad) return sendErr(res, 403, bad);
   if (url.pathname === '/t/info') {
     return probe(t).then(v => { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(v)); })
-      .catch(() => sendErr(res, 502, 'Não foi possível ler o arquivo de vídeo'));
+      .catch(e => sendErr(res, 502, 'Não foi possível ler o arquivo de vídeo: ' + String(e && e.message || '').slice(0, 200)));
   }
   if (tcActive >= MAX_TC) return sendErr(res, 429, 'Servidor ocupado convertendo outros filmes. Tente de novo em instantes.');
   const ss = Math.max(0, Math.floor(+url.searchParams.get('ss') || 0));
